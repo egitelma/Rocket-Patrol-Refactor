@@ -5,9 +5,11 @@ class Play extends Phaser.Scene {
 
     preload() {
         //load images/tile sprites
-        this.load.image("rocket", "./assets/rocket.png")
+        this.load.image("rocket", "./assets/rocket.png");
         this.load.image("spaceship", "./assets/spaceship.png");
+        this.load.image("jet", "./assets/jet.png");
         this.load.image("starfield", "./assets/starfield.png");
+        this.load.image("planet", "./assets/planet.png");
         //load spritesheet
         this.load.spritesheet("explosion", "./assets/explosion.png", {frameWidth: 64, frameHeight: 32, startFrame: 0, endFrame: 8});
     }
@@ -15,6 +17,7 @@ class Play extends Phaser.Scene {
     create() {
         //place tile sprite
         this.starfield = this.add.tileSprite(0, 0, 640, 480, "starfield").setOrigin(0, 0);
+        this.planet = this.add.tileSprite(0, 0, 640, 480, "planet").setOrigin(0, 0);
 
         //green UI background
         this.add.rectangle(0, borderUISize + borderPadding, game.config.width, borderUISize*2, 0x00FF00).setOrigin(0,0);
@@ -28,10 +31,20 @@ class Play extends Phaser.Scene {
         //add rocket (p1)
         this.p1Rocket = new Rocket(this, game.config.width/2, game.config.height - borderUISize - borderPadding, "rocket").setOrigin(0.5, 0);
 
-        //add spaceships (x3)
-        this.ship01 = new Spaceship(this, game.config.width + borderUISize * 6, borderUISize * 4, "spaceship", 0, 30).setOrigin(0, 0);
-        this.ship02 = new Spaceship(this, game.config.width + borderUISize * 3, borderUISize * 5 + borderPadding * 2, "spaceship", 0, 20).setOrigin(0, 0);
-        this.ship03 = new Spaceship(this, game.config.width, borderUISize * 6 + borderPadding * 4, "spaceship", 0, 10).setOrigin(0, 0);
+        //add spaceships
+        this.spaceships = [];
+        for (let i=1; i<=spaceshipCount; i++){
+            this.spaceships.push(new Spaceship(this, game.config.width + borderUISize * (3+i), borderUISize * (5+i), "spaceship", 0, 10*i).setOrigin(0, 0));
+        }
+
+        //add jets
+        this.jets = [];
+        for (let i=1; i<=jetCount; i++){
+            this.jets.push(new Jet(this, game.config.width + borderUISize * (3+i), borderUISize * (5+i), "jet", 0, 10*i).setOrigin(0, 0));
+        }
+        console.log(this.spaceships);
+        console.log("^-^");
+        console.log(this.jets);
 
         //define keys
         keyF = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F);
@@ -49,7 +62,7 @@ class Play extends Phaser.Scene {
         this.p1Score = 0;
 
         //display score
-        let scoreConfig = {
+        textConfig = {
             fontFamily: "Courier",
             fontSize: "28px",
             backgroundColor: "#F3B141",
@@ -61,21 +74,51 @@ class Play extends Phaser.Scene {
             },
             fixedWidth: 100
         }
-        this.scoreLeft = this.add.text(borderUISize + borderPadding, borderUISize + borderPadding * 2, this.p1Score, scoreConfig);
+        this.scoreLeft = this.add.text(borderUISize + borderPadding, borderUISize + borderPadding * 2, this.p1Score, textConfig);
 
         //GAME OVER flag
         this.gameOver = false;
 
         //60-second play clock
-        scoreConfig.fixedWidth = 0;
+        textConfig.fixedWidth = 0;
         this.clock = this.time.delayedCall(game.settings.gameTimer, () => {
-            this.add.text(game.config.width/2, game.config.height/2, "GAME OVER", scoreConfig).setOrigin(0.5);
-            this.add.text(game.config.width/2, game.config.height/2 + 64, "Press (R) to Restart or <- for Menu", scoreConfig).setOrigin(0.5);
+            this.add.text(game.config.width/2, game.config.height/2, "GAME OVER", textConfig).setOrigin(0.5);
+            this.add.text(game.config.width/2, game.config.height/2 + 64, "Press (R) to Restart or <- for Menu", textConfig).setOrigin(0.5);
+            this.text.destroy();
+            this.text = this.add.text(game.config.width/2, borderUISize + borderPadding * 2, "0", textConfig);
             this.gameOver = true;
         }, null, this);
+
+        //on-screen timer
+        this.timeLeft = game.settings.gameTimer/1000;
+        this.text = this.add.text(game.config.width/4, borderUISize + borderPadding * 2, this.timeLeft, textConfig)
+        this.timer = this.time.addEvent({
+            delay: 1000,
+            callback: () => {
+                this.timeLeft--;
+            },
+            loop: true
+        })
+
+        //high score
+        this.highScoreText = this.add.text(game.config.width/2, borderUISize + borderPadding * 2, "HIGH SCORE:" + highScore, textConfig);
+        console.log(this.highScoreText);
     }
 
     update() {
+        //update high score <3
+        this.highScoreText.destroy();
+        if(this.p1Score > highScore){
+            highScore = this.p1Score;
+        }
+        this.highScoreText = this.add.text((game.config.width/2), borderUISize + borderPadding * 2, "HIGH SCORE:" + highScore, textConfig);
+
+        //update timer
+        if(!this.gameOver){
+            this.text.destroy();
+            this.text = this.add.text(game.config.width/4, borderUISize + borderPadding * 2, this.timeLeft, textConfig);
+        }
+
         //check key input for restart
         if (this.gameOver && Phaser.Input.Keyboard.JustDown(keyR)) {
             this.scene.restart();
@@ -86,29 +129,33 @@ class Play extends Phaser.Scene {
         }
 
         this.starfield.tilePositionX -= 4;
+        this.planet.tilePositionX -= 2;
 
         if (!this.gameOver) {
         //update rocket (p1)
         this.p1Rocket.update();
-        //update spaceships (x3)
-        this.ship01.update();
-        this.ship02.update();
-        this.ship03.update();
+        //update spaceships
+        for(let i=0; i<spaceshipCount; i++){
+            this.spaceships[i].update();
+            // console.log(this.spaceships[i].x);
+        }
+        for(let i=0; i<jetCount; i++){
+            this.jets[i].update();
+        }
     }
 
         //check collisions
-        //this feels like it could be written way more efficiently but i assume we'll work on that later
-        if (this.checkCollision(this.p1Rocket, this.ship03)) {
-            this.p1Rocket.reset();
-            this.shipExplode(this.ship03);
+        for(let i=0; i<spaceshipCount; i++){
+            if (this.checkCollision(this.p1Rocket, this.spaceships[i])) {
+                this.p1Rocket.reset();
+                this.shipExplode(this.spaceships[i]);
+            }
         }
-        if (this.checkCollision(this.p1Rocket, this.ship02)) {
-            this.p1Rocket.reset();
-            this.shipExplode(this.ship02);
-        }
-        if (this.checkCollision(this.p1Rocket, this.ship01)) {
-            this.p1Rocket.reset();
-            this.shipExplode(this.ship01);
+        for(let i=0; i<jetCount; i++){
+            if (this.checkCollision(this.p1Rocket, this.jets[i])) {
+                this.p1Rocket.reset();
+                this.shipExplode(this.jets[i]);
+            }
         }
     }
 
